@@ -15,6 +15,7 @@ float playerZ = 0.0f;
 float playerYaw = 0.0f;
 float playerMoveSpeed = 8.0f;
 float playerTurnSpeed = 120.0f;
+float playerRadius = 0.65f;
 bool playerIsMoving = false;
 
 bool keyStates[256] = {false};
@@ -29,6 +30,36 @@ float cameraHeight = 9.0f;
 
 float degreesToRadians(float degrees) {
     return degrees * 3.14159265f / 180.0f;
+}
+
+float distance2D(float x1, float z1, float x2, float z2) {
+    float dx = x1 - x2;
+    float dz = z1 - z2;
+    return std::sqrt(dx * dx + dz * dz);
+}
+
+bool checkAABB(float x, float z, float radius,
+               float minX, float maxX, float minZ, float maxZ) {
+    // AABB means Axis-Aligned Bounding Box.
+    // For this project, each main building is treated as a simple rectangle
+    // on the XZ ground plane. The player is treated as a small circle.
+    // Expanding the rectangle by playerRadius prevents the player's body
+    // from entering the building box.
+    return x + radius > minX &&
+           x - radius < maxX &&
+           z + radius > minZ &&
+           z - radius < maxZ;
+}
+
+bool checkWorldCollision(float x, float z) {
+    // Main building footprints. These numbers match the scaled cube sizes
+    // used in drawHall(), drawLibrary(), drawCSEBuilding(), and drawHPCLLab().
+    bool hitsHall = checkAABB(x, z, playerRadius, -50.0f, -26.0f, -26.0f, -14.0f);
+    bool hitsLibrary = checkAABB(x, z, playerRadius, -22.0f, 6.0f, 35.0f, 49.0f);
+    bool hitsCSE = checkAABB(x, z, playerRadius, 24.0f, 48.0f, 8.0f, 24.0f);
+    bool hitsHPCL = checkAABB(x, z, playerRadius, 46.0f, 58.0f, 26.0f, 36.0f);
+
+    return hitsHall || hitsLibrary || hitsCSE || hitsHPCL;
 }
 
 void drawScaledCube(float width, float height, float depth) {
@@ -531,8 +562,19 @@ void updatePlayer(float deltaTime) {
         moveX /= length;
         moveZ /= length;
 
+        // Store the previous position before movement. If the new position
+        // collides with a building AABB, restore these old coordinates.
+        float previousX = playerX;
+        float previousZ = playerZ;
+
         playerX += moveX * playerMoveSpeed * deltaTime;
         playerZ += moveZ * playerMoveSpeed * deltaTime;
+
+        if (checkWorldCollision(playerX, playerZ)) {
+            playerX = previousX;
+            playerZ = previousZ;
+            playerIsMoving = false;
+        }
     }
 }
 
