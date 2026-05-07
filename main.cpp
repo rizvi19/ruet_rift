@@ -1,6 +1,7 @@
 #include <GL/freeglut.h>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 
 // RUET Rift: The 10-Hour Distortion
 // Clean base project for a syllabus-friendly C++ OpenGL/GLUT program.
@@ -27,6 +28,11 @@ float animationTime = 0.0f;
 int cameraMode = 0;
 float cameraDistance = 18.0f;
 float cameraHeight = 9.0f;
+
+int currentLevel = 1;
+int hoursRemaining = 10;
+int fragmentsCollected = 0;
+std::string currentObjective = "Explore the distorted RUET campus.";
 
 float degreesToRadians(float degrees) {
     return degrees * 3.14159265f / 180.0f;
@@ -62,11 +68,38 @@ bool checkWorldCollision(float x, float z) {
     return hitsHall || hitsLibrary || hitsCSE || hitsHPCL;
 }
 
+bool isNearInteractionObject() {
+    // Temporary interaction points near important doors.
+    // Real level objects will replace these later.
+    bool nearHallDoor = distance2D(playerX, playerZ, -38.0f, -28.6f) < 3.0f;
+    bool nearLibraryDoor = distance2D(playerX, playerZ, -8.0f, 33.0f) < 3.0f;
+    bool nearCSEDoor = distance2D(playerX, playerZ, 36.0f, 6.0f) < 3.0f;
+    bool nearHPCLDoor = distance2D(playerX, playerZ, 52.0f, 24.0f) < 3.0f;
+
+    return nearHallDoor || nearLibraryDoor || nearCSEDoor || nearHPCLDoor;
+}
+
 void drawScaledCube(float width, float height, float depth) {
     glPushMatrix();
         glScalef(width, height, depth);
         glutSolidCube(1.0f);
     glPopMatrix();
+}
+
+void drawText2D(float x, float y, const std::string& text) {
+    glRasterPos2f(x, y);
+
+    for (char character : text) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, character);
+    }
+}
+
+void drawText3D(const std::string& text, float x, float y, float z) {
+    glRasterPos3f(x, y, z);
+
+    for (char character : text) {
+        glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, character);
+    }
 }
 
 void drawCylinder(float radius, float height, int slices = 20) {
@@ -395,6 +428,61 @@ void drawPlayer() {
     glPopMatrix();
 }
 
+void drawSkyTimer() {
+    // 3D text placed high in the world. It is still GLUT bitmap text,
+    // but the raster position belongs to the 3D camera scene.
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 0.92f, 0.25f);
+    drawText3D(std::to_string(hoursRemaining) + " HOURS REMAINING", -18.0f, 24.0f, -35.0f);
+}
+
+void drawHUD() {
+    // The HUD is drawn in screen space, so temporarily switch from the
+    // perspective projection to a 2D orthographic projection.
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0.0f, windowWidth, 0.0f, windowHeight);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+
+    glColor3f(0.02f, 0.03f, 0.04f);
+    drawText2D(18.0f, windowHeight - 23.0f, "RUET RIFT: THE 10-HOUR DISTORTION");
+
+    glColor3f(1.0f, 1.0f, 1.0f);
+    drawText2D(18.0f, windowHeight - 25.0f, "RUET RIFT: THE 10-HOUR DISTORTION");
+    drawText2D(18.0f, windowHeight - 52.0f,
+               "Level: " + std::to_string(currentLevel) + " / 10");
+    drawText2D(18.0f, windowHeight - 79.0f,
+               "Time Left: " + std::to_string(hoursRemaining) + " Hours");
+    drawText2D(18.0f, windowHeight - 106.0f,
+               "Fragments: " + std::to_string(fragmentsCollected) + " / 10");
+    drawText2D(18.0f, windowHeight - 133.0f,
+               "Objective: " + currentObjective);
+
+    if (isNearInteractionObject()) {
+        glColor3f(1.0f, 0.88f, 0.25f);
+        drawText2D(18.0f, 32.0f, "Press E to interact");
+    } else {
+        glColor3f(0.85f, 0.88f, 0.92f);
+        drawText2D(18.0f, 32.0f, "Move near a door or object to interact");
+    }
+
+    glEnable(GL_DEPTH_TEST);
+
+    glPopMatrix();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    glMatrixMode(GL_MODELVIEW);
+}
+
 void setupCamera() {
     // MODELVIEW controls the camera and object transformations.
     glMatrixMode(GL_MODELVIEW);
@@ -435,8 +523,10 @@ void display() {
 
     setupCamera();
     drawCampus();
+    drawSkyTimer();
     drawCoordinateAxes();
     drawPlayer();
+    drawHUD();
 
     // GLUT_DOUBLE uses a back buffer. Swap makes the completed frame visible.
     glutSwapBuffers();
